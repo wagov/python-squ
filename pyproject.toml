@@ -7,8 +7,8 @@ preview = true
 line-length = 120
 
 [tool.poetry]
-name = "python-squ"
-version = "1.0.0"
+name = "squ"
+version = "1.0.1"
 description = ""
 authors = ["Adon Metcalfe <adonm@fastmail.fm>"]
 readme = "README.md"
