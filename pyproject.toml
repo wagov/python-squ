@@ -12,7 +12,7 @@ version = "1.0.0"
 description = ""
 authors = ["Adon Metcalfe <adonm@fastmail.fm>"]
 readme = "README.md"
-packages = [{ include = "python_squ" }]
+packages = [{ include = "squ" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"

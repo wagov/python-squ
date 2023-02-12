@@ -1,4 +1,4 @@
-from python_squ.api import OutputFormat, azcli, list_workspaces, query_all
+from squ.api import OutputFormat, azcli, list_workspaces, query_all
 import pandas
 
 class TestClass:
