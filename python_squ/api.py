@@ -8,36 +8,27 @@ import importlib
 import io
 import json
 import os
-import re
 import shlex
-import tempfile
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
 from enum import Enum
-from mimetypes import guess_type
 from pathlib import Path
 from random import shuffle
 from string import Template
 from typing import Optional
+from upath import UPath
+
 
 import httpx_cache
 import pandas
-import papermill
 import requests
 from azure.kusto.data.helpers import dataframe_from_result_table
-from cloudpathlib import AnyPath
 from dateutil.parser import isoparse
-from fastapi import APIRouter, Body, HTTPException, Request, Response
-from fastapi.responses import PlainTextResponse, StreamingResponse
 from requests.exceptions import ReadTimeout
 
-from .azcli import adx_query, azcli, cache, clean_path, logger, settings, submit
-from .proxy import httpx_client
-
-router = APIRouter()
-
+from .azcli import (adx_query, azcli, cache, clean_path, logger, settings, httpx_client, adxtable2df)
 
 class OutputFormat(str, Enum):
     """
@@ -49,18 +40,6 @@ class OutputFormat(str, Enum):
     LIST = "list"
     DF = "df"
     CMD = "cmd"
-
-
-@router.get("/datalake/{path:path}")
-def datalake(path: str):
-    """
-    Downloads a file from the datalake, e.g. `notebooks/lists/SentinelWorkspaces.csv`
-    """
-    path = settings("datalake_path") / clean_path(path)
-    if not path.exists():
-        logger.warning(f"datalake {path} not found")
-        raise HTTPException(404, f"{path} not found")
-    return StreamingResponse(content=path.open(), media_type=guess_type(path.name)[0])
 
 
 def datalake_json(path: str, content=None, modified_key: Optional[str] = None) -> dict:
@@ -94,7 +73,6 @@ def datalake_json(path: str, content=None, modified_key: Optional[str] = None) -
     return content
 
 
-@router.get("/loadkql", response_class=PlainTextResponse)
 @cache.memoize()
 def load_kql(query: str) -> str:
     """
@@ -143,22 +121,22 @@ def analytics_query(
             logger.warning(f"{exc}: falling back to individual queries")
     # run each query separately and stitch results, 20 at a time.
     results = []
-    futures = {
-        workspace: submit(azcli, cmd_base + ["--workspace", workspace]) for workspace in workspaces
-    }
-    for workspace, future in futures.items():
-        try:
-            result = future.result()
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning(exc)
-            result = []
-        for item in result:
-            item.update({"TenantId": workspace})
-        results += result
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {
+            workspace: executor.submit(azcli, cmd_base + ["--workspace", workspace]) for workspace in workspaces
+        }
+        for workspace, future in futures.items():
+            try:
+                result = future.result()
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.warning(exc)
+                result = []
+            for item in result:
+                item.update({"TenantId": workspace})
+            results += result
     return results
 
 
-@router.get("/listWorkspaces")
 @cache.memoize(ttl=60 * 60 * 3)  # 3 hr cache
 def list_workspaces(fmt: OutputFormat = OutputFormat.LIST, agency="ALL"):
     "Get sentinel workspaces from {datalake}/notebooks/lists/SentinelWorkspaces.csv"
@@ -220,7 +198,6 @@ def workspace_details():
     return wsdetail
 
 
-@router.get("/listDomains", response_class=PlainTextResponse)
 def list_domains(agency: str, fmt="text") -> str:
     """
     Returns a list of domains for a given agency.
@@ -236,7 +213,7 @@ def list_domains(agency: str, fmt="text") -> str:
     secops = secops[secops.alias == agency]  # filter by agency
     workspaces = list(secops.customerId.dropna())
     if not workspaces:
-        raise HTTPException(404, f"agency {agency} not found")
+        raise Exception(f"agency {agency} not found")
     existing_domains = set(str(secops.domains.dropna().sum()).strip().split("\n"))
     if existing_domains == set("0"):
         existing_domains = set()
@@ -297,24 +274,6 @@ class AtlaskitFmt(str, Enum):
     WIKIMARKUP = "wiki"
 
 
-@router.post("/atlaskit/{input}/to/{output}")
-def atlaskit(
-    request: Request,
-    srcfmt: AtlaskitFmt,
-    destfmt: AtlaskitFmt,
-    body=Body("# Test Header", media_type="text/plain"),
-):
-    """
-    Converts between atlaskit formats using js modules.
-    """
-    origin = atlaskit_client().post(
-        f"/{srcfmt}/to/{destfmt}",
-        content=body,
-        headers={"content-type": request.headers["content-type"]},
-    )
-    return Response(status_code=origin.status_code, content=origin.content)
-
-
 def build_la_signature(
     customer_id: str,
     shared_key: str,
@@ -359,20 +318,8 @@ def build_la_signature(
     authorization = f"SharedKey {customer_id}:{encoded_hash}"
     return authorization
 
-
-ExampleQuery = Body(
-    """// Example KQL query
-SecurityIncident
-| summarize count() by Severity
-""",
-    media_type="text/plain",
-)
-
-
-@router.get("/query")
-@router.post("/query")
 def query_all(
-    query: str = ExampleQuery,
+    query: str,
     group_queries: bool = True,
     timespan: str = "P7D",
     fmt: OutputFormat = OutputFormat.JSON,
@@ -384,7 +331,7 @@ def query_all(
         cmd = analytics_query(
             list_workspaces(), query, timespan, group_queries=group_queries, dry_run=True
         )
-        return PlainTextResponse(content=cmd)
+        return cmd
     results = analytics_query(list_workspaces(), query, timespan, group_queries=group_queries)
     if fmt == OutputFormat.JSON:
         return results
@@ -392,37 +339,6 @@ def query_all(
         return pandas.DataFrame.from_dict(results).to_csv()
     elif fmt == OutputFormat.DF:
         return pandas.DataFrame.from_dict(results)
-
-
-@router.post("/collect")
-def collect(
-    table: str, query: str = ExampleQuery, timespan: str = "P7D", target_workspace: str = None
-):
-    """
-    - Query all workspaces from `/listWorkspaces` using kusto.
-    - Collects query results into a central {table}.
-    - Note that due to ingestion lag past 7 day deduplication may fail for the first few runs
-      if run at intervals of less than 15 minutes.
-    - `target_workspace` is optional (will use env if not set), should be configured as
-      {resourcegroup}/{workspacename} (subscription will be inferred from DATALAKE_SUBSCRIPTION)
-    """
-    results = analytics_query(list_workspaces(), query, timespan)
-    submit(upload_loganalytics, results, table, target_workspace)
-    return len(results)
-
-
-@router.post("/summarise")
-def summarise(blobpath: str, query: str = ExampleQuery, timespan: str = "P7D"):
-    """
-    - Query all workspaces in {datalake}/notebooks/lists/SentinelWorkspaces.csv using kusto.
-    - Save results to {config("datalake_path")}/{querydate}/{filename}.json
-    - Results are saved as a single json file intended for e.g. powerbi
-    """
-    results = analytics_query(list_workspaces(), query, timespan)
-    blobpath = blobpath.format(querydate=datetime.utcnow().date().isoformat())
-    logger.info(f"Uploading to {blobpath}")
-    datalake_json(blobpath, results)
-    return len(results)
 
 
 def zip_data(obj: dict[pandas.DataFrame]) -> bytes:
@@ -467,12 +383,12 @@ def zip_data(obj: dict[pandas.DataFrame]) -> bytes:
     return zip_bytes.getvalue()
 
 
-def load_dataframes(path: AnyPath) -> dict[pandas.DataFrame]:
+def load_dataframes(path: UPath) -> dict[pandas.DataFrame]:
     """
     Reads a zip file containing json files into a dictionary of dataframes.
 
     Args:
-        path (AnyPath): Path to zip file
+        path (UPath): Path to zip file
 
     Returns:
         dict[pandas.DataFrame]: Dictionary of dataframes
@@ -572,10 +488,11 @@ def report_zipjson(query_config: dict, agency: str, timespan: str):
     wsids = list_workspaces(OutputFormat.LIST, agency)
     agency_info = list_workspaces(OutputFormat.DF, agency)
     futures, text_files = {}, {}
-    for name, kql in query_config["kql"].items():
-        futures[f"{name}.json"] = submit(kql2df, kql, timespan, wsids)
-        text_files[f"{name}.kql"] = kql
-    report_data = {name: future.result() for name, future in futures.items()}
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        for name, kql in query_config["kql"].items():
+            futures[f"{name}.json"] = executor.submit(kql2df, kql, timespan, wsids)
+            text_files[f"{name}.kql"] = kql
+        report_data = {name: future.result() for name, future in futures.items()}
     report_data.update(text_files)
     if agency == "ALL":
         logger.debug("Querying runzero assets: ALL")
@@ -594,139 +511,6 @@ def report_zipjson(query_config: dict, agency: str, timespan: str):
         report_data["Internet Exposed Services.json"] = runzero2df({"search": runzero_query})
     report_data["Agency Info.json"] = agency_info
     return zip_data(report_data)
-
-
-@router.post("/collect_report_json")
-def collect_report_json(
-    query_config_path: str = "notebooks/wasoc-notebook/kql/report-queries.json",
-    blobpath: str = "notebooks/query_cache",
-    timespan: str = "P45D",
-    agency: str = "ALL",
-    max_age: int = 900,
-):
-    """
-    Collects json for a report. Queries are run in parallel and the results are saved to a zip file per agency.
-    The zip files are for use by the report generation notebook and by users who want an offline copy of the data.
-
-    Args:
-        query_config_path (str, optional): Path to the query config file.
-            Defaults to "notebooks/wasoc-notebook/kql/report-queries.json".
-        blobpath (str, optional): Path to save query results (as zipped json) to. Defaults to "notebooks/query_cache".
-        timespan (str, optional): Timespan to query. Defaults to "P45D".
-        agency (str, optional): Agency to return zip for synchronously. Defaults to None.
-        max_stale (int, optional): Max age of cached data in seconds. Defaults to 900.
-    - Step through config performing per agency and global queries
-    - Queries can either be log analytics or http api calls
-    - Responses are parsed into dataframes, then compressed and uploaded to blob storage
-    """
-    query_config = datalake_json(query_config_path)
-    date = datetime.utcnow().strftime("%Y-%m")
-    kql_base = (settings("datalake_path") / query_config_path).parent
-    for query, kql_path in query_config["kql"].items():
-        query_config["kql"][query] = (kql_base / kql_path).read_text()
-    agencies = list_workspaces(fmt=OutputFormat.DF).dropna(subset=["alias"])
-    if agency != "ALL" and agency not in agencies["alias"].values:
-        raise HTTPException(status_code=404, detail=f"Agency {agency} not found")
-    latest_data = []
-    for alias in list(agencies["alias"].unique()) + ["ALL"]:
-        if agency != "ALL" and agency != alias:
-            continue
-        filename = f"{alias}_data.zip"
-        zip_file = settings("datalake_path") / f"{clean_path(blobpath)}/{date}/{filename}"
-        if zip_file.exists() and datetime.utcnow().timestamp() - zip_file.stat().st_mtime < max_age:
-            logger.debug(
-                f"Data {zip_file} exists, age:"
-                f" {datetime.utcnow().timestamp() - zip_file.stat().st_mtime} seconds"
-            )
-            zip_bytes = zip_file.read_bytes()
-        else:
-            zip_bytes = report_zipjson(query_config, alias, timespan)
-            zip_file.write_bytes(zip_bytes)
-        if agency == alias:
-            return StreamingResponse(
-                io.BytesIO(zip_bytes),
-                media_type="application/zip",
-                headers={"Content-Disposition": f"attachment; filename={filename}"},
-            )
-        latest_data.append({"agency": alias, "zip_file": filename})
-    query_config["results"] = latest_data
-    return query_config
-
-
-@router.post("/papermill_report")
-def papermill_report(
-    agency: str = "ALL", notebook: str = "wasoc-notebook/report-monthly.ipynb", max_age: int = 900
-):
-    """
-    Runs a notebook with one or more agencies as context.
-
-    Args:
-        - agency (str): Agency to run report for.
-        - notebook (str, optional): Path to notebook to run. Defaults to "notebooks/report-monthly.ipynb".
-        - template (str, optional): Path to template to use. Defaults to "notebooks/report-monthly.md".
-    """
-    latest_reports, errors = [], []
-    report_path = settings("datalake_path") / "notebooks" / "reports"
-    notebook = clean_path(notebook)
-    localpath = Path(notebook).parent / "notebooks" / Path(notebook).name
-    if localpath.exists():
-        logger.debug(f"Local notebook {localpath} found, using that instead")
-        notebook = localpath.read_text()
-    else:
-        notebook = (report_path.parent / notebook).read_text()
-    title = re.search(r"# ([\w\s]+)", notebook).group(1)  # nab first header from notebook
-    current_month = datetime.utcnow().strftime("%Y-%m")
-    agencies = list_workspaces(fmt=OutputFormat.DF).dropna(subset=["alias"])
-    for alias in list(agencies["alias"].unique()) + ["ALL"]:
-        report_pdf = f"{alias}/{current_month} {title} ({alias}).pdf"
-        report_zip = f"{alias}/{current_month} {title} Data ({alias}).zip"
-        output_files = {"agency": alias, "links": [report_pdf, report_zip]}
-        latest_reports.append(output_files)
-        if agency and agency != alias and agency != "ALL":
-            # only process one agency unless agency is ALL
-            continue
-        if (report_path / report_pdf).exists() and (report_path / report_zip).exists():
-            report_time = (report_path / report_pdf).stat().st_mtime
-            logger.debug(
-                f"Report {report_pdf} exists, age:"
-                f" {datetime.utcnow().timestamp() - report_time} seconds"
-            )
-            if datetime.utcnow().timestamp() - report_time < max_age:
-                continue
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".ipynb", mode="wt") as tmpnb:
-            tmpnb.write(notebook)
-            params = {
-                "agency": alias,
-                "report_pdf": f"{report_path.name}/{report_pdf}",
-                "report_zip": f"{report_path.name}/{report_zip}",
-            }
-        logger.debug(f"{alias} report being generated...")
-        try:
-            papermill.execute_notebook(tmpnb.name, None, params)
-        except Exception as exc:
-            attempted = latest_reports.pop()
-            attempted["error"] = str(exc)
-            errors.append(attempted)
-    (report_path / "latest.json").write_text(json.dumps(latest_reports, indent=2))
-    if errors:
-        (report_path / "errors.json").write_text(json.dumps(errors, indent=2))
-        if agency != "ALL":
-            return errors
-    return latest_reports
-
-
-@router.post("/export")
-def export(blobpath: str, filenamekeys: str, query: str = ExampleQuery, timespan: str = "P7D"):
-    """
-    - Query all workspaces in {config("datalake_path")}/notebooks/lists/SentinelWorkspaces.csv using kusto.
-    - Save results to {config("datalake_path")}/{blobpath}/{date}/{filename}.json
-    - Results are saved as individual .json files, and overwritten if they already exist.
-    - Filenamekeys are a comma separated list of keys to build filename from
-    """
-    results = analytics_query(list_workspaces(), query, timespan)
-    submit(upload_results, results, blobpath, filenamekeys)
-    return len(results)
-
 
 @cache.memoize(ttl=60 * 60)
 def data_collector(target_workspace: str = None) -> tuple[str]:
@@ -759,86 +543,6 @@ def data_collector(target_workspace: str = None) -> tuple[str]:
         "primarySharedKey"
     ]
     return customer_id, shared_key
-
-
-def upload_loganalytics_raw(rows, customer_id, shared_key, log_type):
-    """
-    Uploads json log analytics data to a workspace.
-    """
-    body = json.dumps(rows)  # dump new rows ready for upload
-    method, content_type, resource = "POST", "application/json", "/api/logs"
-    rfc1123date = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
-    content_length = len(body)
-
-    logger.info(f"Uploading {content_length} bytes to {log_type}_CL")
-
-    signature = build_la_signature(
-        customer_id, shared_key, rfc1123date, content_length, method, content_type, resource
-    )
-    uri = (
-        "https://"
-        + customer_id
-        + ".ods.opinsights.azure.com"
-        + resource
-        + "?api-version=2016-04-01"
-    )
-    headers = {
-        "content-type": content_type,
-        "Authorization": signature,
-        "Log-Type": log_type,
-        "x-ms-date": rfc1123date,
-    }
-
-    response = requests.post(uri, data=body, headers=headers, timeout=120)
-    if response.status_code >= 300:
-        raise HTTPException(response.status_code, response.text)
-
-
-@router.post("/ingest")
-def upload_loganalytics(rows: list[dict], log_type: str, target_workspace: str = None):
-    """
-    Uploads a set of records to the {data_collector} workspace into table {log_type}_CL.
-    - Deduplicates against similar data for the past 7 days using a sha256 hash of the row.
-    - `target_workspace` is optional (will use env if not set), should be configured as {resourcegroup}/{workspacename}
-      (subscription will be inferred from DATALAKE_SUBSCRIPTION)
-    """
-    customer_id, shared_key = data_collector(target_workspace)
-    try:
-        existing_data = analytics_query(
-            [customer_id], f"{log_type}_CL", "P7D"
-        )  # Scan past 7 days for duplicates
-    except Exception as exc:  # pylint: disable=broad-except
-        logger.warning(
-            f"{exc}: existing table {log_type}_CL not found in {customer_id} workspace, skipping"
-            " deduplication"
-        )
-        existing_data = []  # If we can't query, assume no duplicates
-    existing_hashes = set()
-    digest_column = "_row_sha256"
-    for row in existing_data:
-        if isinstance(row, dict):
-            hashkeys = [k for k in row.keys() if k.startswith(digest_column)]
-            if len(hashkeys) == 1:
-                existing_hashes.add(row[hashkeys[0]])  # collect hashes of existing data
-    for item in rows:
-        for key in ["TenantId", "tenant", "TimeGenerated", "RawData"]:  # rename reserved columns
-            if key in item.keys():
-                item[key + "_orig"] = item.pop(key)
-        digest = hashlib.sha256(json.dumps(item, sort_keys=True).encode("utf8")).hexdigest()
-        if digest not in existing_hashes:
-            item[digest_column] = digest  # only add digest for new rows
-    allrows = [item for item in rows if digest_column in item.keys()]
-    if len(rows) == 0:
-        logger.info("Nothing to upload")
-        return
-    rowsize = len(json.dumps(rows[0]).encode("utf8"))
-    chunk_size = int(20 * 1024 * 1024 / rowsize)  # 20MB max size
-    chunks = [allrows[x : x + chunk_size] for x in range(0, len(allrows), chunk_size)]
-    futures = []
-    for rows in chunks:
-        futures.append(submit(upload_loganalytics_raw, rows, customer_id, shared_key, log_type))
-    # wait(futures)
-    logger.info(f"Uploaded {len(allrows)} records to {log_type}_CL.")
 
 
 def get_dx_kql(name):
@@ -984,16 +688,12 @@ def export_jira_issues():
 
 
 def update_jira_issues(start_after="ago(3h)"):
-    from siem_query_utils.sentinel_beautify import sentinel_beautify_local
-    from time import sleep
     from json import JSONDecodeError
+    from time import sleep
+
+    from python_squ.sentinel_beautify import sentinel_beautify_local
 
     client = httpx_api("jira-3")
-
-    def adxtable2df(table):
-        columns = [col.column_name for col in table.columns]
-        frame = pandas.DataFrame(table.raw_rows, columns=columns)
-        return frame
 
     # +
     def jiradata(siemrefs):

@@ -2,7 +2,6 @@
 Azure CLI helpers and core functions
 """
 # pylint: disable=logging-fstring-interpolation, unspecified-encoding
-import asyncio
 import base64
 import hashlib
 import importlib
@@ -14,20 +13,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from string import Template
 from types import FunctionType
-from concurrent.futures import ThreadPoolExecutor
 
 import httpx_cache
+import pandas
 from azure.cli.core import get_default_cli
-from azure.storage.blob import BlobServiceClient
-from cacheout import Cache
-from cloudpathlib import AzureBlobClient
-from dotenv import load_dotenv
-from fastapi import HTTPException
-from pathvalidate import sanitize_filepath
-from uvicorn.config import Config
 from azure.kusto.data import KustoClient, KustoConnectionStringBuilder
-from azure.kusto.data.exceptions import KustoServiceError, KustoThrottlingError
-
+from cacheout import Cache
+from dotenv import load_dotenv
+from pathvalidate import sanitize_filepath
+from upath import UPath
 
 # load env vars from .env files
 for f in Path(".env").absolute().parents:
@@ -40,7 +34,6 @@ for f in Path(".env").absolute().parents:
 
 # Steal uvicorns logger config
 logger = logging.getLogger("uvicorn.error")
-Config(f"{__package__}:app").configure_logging()
 logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 cache = Cache(maxsize=25600, ttl=300)
@@ -102,7 +95,7 @@ def boot(secret: str) -> str:
     secret = azcli(["keyvault", "secret", "show", "--id", secret])
     if not secret or "error" in secret:
         logger.warning(secret["error"])
-        raise HTTPException(403, "KEYVAULT_SESSION_SECRET not available")
+        raise Exception("KEYVAULT_SESSION_SECRET not available")
     return secret["value"]
 
 
@@ -129,7 +122,7 @@ def load_session(data: str = None, config: dict = json.loads(default_session)):
         config.update(json.loads(base64.b64decode(data)))
     except Exception as exc:
         logger.warning(exc)
-        raise HTTPException(500, "Failed to load session data") from exc
+        raise Exception("Failed to load session data") from exc
     session = {"session": config, "base64": encode_session(config), "apis": {}}
     session["key"] = hashlib.sha256(session["base64"]).hexdigest()
     for item, data in config.items():
@@ -151,37 +144,6 @@ def clean_path(path: str) -> str:
         str: sanitized path
     """
     return sanitize_filepath(path.replace("..", ""), platform="auto")
-
-
-def configure_loop():
-    """
-    Configure shared background threads for all async functions
-
-    Uses uvicorns default loop with a fallback to creating a new loop
-    """
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-    app_state["executor"] = ThreadPoolExecutor(max_workers=int(os.environ.get("MAX_THREADS", 8)))
-    loop.set_default_executor(app_state["executor"])
-
-
-def submit(func, *args, **kwargs):
-    """
-    Submit a function to the default loop executor
-
-    Args:
-        func (function): function to run
-        *args: function arguments
-        **kwargs: function keyword arguments
-
-    Returns:
-        asyncio.Future: future object
-    """
-    if "executor" not in app_state:
-        configure_loop()
-    return app_state["executor"].submit(func, *args, **kwargs)
 
 
 def bootstrap(_app_state: dict):
@@ -393,13 +355,12 @@ def get_blob_path(url: str, subscription: str = ""):
         sas = settings("datalake_sas")  # use preset sas token if available
     else:
         sas = generatesas(account, container, subscription)
-    blobclient = AzureBlobClient(
-        blob_service_client=BlobServiceClient(
-            account_url=url.replace(f"/{container}", ""), credential=sas
-        )
-    )
-    return blobclient.CloudPath(f"az://{container}")
+    return UPath(f"az://{container}", account_name = account, sas_token = sas)
 
+def adxtable2df(table):
+    columns = [col.column_name for col in table.columns]
+    frame = pandas.DataFrame(table.raw_rows, columns=columns)
+    return frame
 
 def adx_query(kql):
     """
