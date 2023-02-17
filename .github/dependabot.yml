@@ -9,7 +9,7 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
-  - package-ecosystem: "npm" # Monitor package.lock (Node 19)
+  - package-ecosystem: "npm" # Monitor package.lock
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
