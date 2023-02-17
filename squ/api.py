@@ -1,6 +1,7 @@
 """
 Main api endpoints to be added to a fastapi app
 """
+# pylint: disable=logging-fstring-interpolation, broad-exception-raised, invalid-name
 import base64
 import hashlib
 import hmac
@@ -11,24 +12,27 @@ import os
 import shlex
 import time
 import zipfile
-from concurrent.futures import ThreadPoolExecutor, wait
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
+from json import JSONDecodeError
 from pathlib import Path
 from random import shuffle
 from string import Template
 from typing import Optional
-from upath import UPath
-
 
 import httpx_cache
 import pandas
 import requests
+from abuseipdb_wrapper import AbuseIPDB
+from atlassian import Jira
 from azure.kusto.data.helpers import dataframe_from_result_table
 from dateutil.parser import isoparse
 from requests.exceptions import ReadTimeout
+from upath import UPath
 
-from .azcli import (adx_query, azcli, cache, clean_path, logger, settings, httpx_client, adxtable2df)
+from .azcli import adx_query, adxtable2df, azcli, cache, clean_path, httpx_client, logger, settings
+
 
 class OutputFormat(str, Enum):
     """
@@ -40,6 +44,18 @@ class OutputFormat(str, Enum):
     LIST = "list"
     DF = "df"
     CMD = "cmd"
+
+
+def abuse_client():
+    return AbuseIPDB(API_KEY=os.environ["ABUSEIPDB_API_KEY"])
+
+
+def jira_client():
+    return Jira(
+        url=os.environ["JIRA_URL"],
+        username=os.environ["JIRA_USERNAME"],
+        password=os.environ["JIRA_PASSWORD"],
+    )
 
 
 def datalake_json(path: str, content=None, modified_key: Optional[str] = None) -> dict:
@@ -123,7 +139,8 @@ def analytics_query(
     results = []
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {
-            workspace: executor.submit(azcli, cmd_base + ["--workspace", workspace]) for workspace in workspaces
+            workspace: executor.submit(azcli, cmd_base + ["--workspace", workspace])
+            for workspace in workspaces
         }
         for workspace, future in futures.items():
             try:
@@ -237,9 +254,9 @@ def list_domains(agency: str, fmt="text") -> str:
 
 
 def upload_results(results, blobdest, filenamekeys):
+    "Uploads a list of json results as files split by timegenerated to a blob destination"
     if not results:
         return
-    "Uploads a list of json results as files split by timegenerated to a blob destination"
     blobdest = clean_path(blobdest)
     with ThreadPoolExecutor(max_workers=32) as executor:
         futures = []
@@ -317,6 +334,7 @@ def build_la_signature(
     ).decode()
     authorization = f"SharedKey {customer_id}:{encoded_hash}"
     return authorization
+
 
 def query_all(
     query: str,
@@ -512,6 +530,7 @@ def report_zipjson(query_config: dict, agency: str, timespan: str):
     report_data["Agency Info.json"] = agency_info
     return zip_data(report_data)
 
+
 @cache.memoize(ttl=60 * 60)
 def data_collector(target_workspace: str = None) -> tuple[str]:
     """
@@ -688,10 +707,7 @@ def export_jira_issues():
 
 
 def update_jira_issues(start_after="ago(3h)"):
-    from json import JSONDecodeError
-    from time import sleep
-
-    from python_squ.sentinel_beautify import sentinel_beautify_local
+    from .sentinel_beautify import sentinel_beautify_local
 
     client = httpx_api("jira-3")
 

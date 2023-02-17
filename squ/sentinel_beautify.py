@@ -7,7 +7,7 @@ from flatten_json import flatten
 from markdown import markdown
 
 from .api import OutputFormat, atlaskit_client, list_workspaces
-from .azcli import logger, settings
+from .azcli import settings
 
 
 def sentinel_beautify_local(
@@ -204,9 +204,11 @@ def sentinel_beautify_local(
                 "secops_status": customer.get("SecOps Status") or default_status,
                 "jira_orgid": customer.get("JiraOrgId") or default_orgid,
                 "customer": customer,
-                "wikimarkup": atlaskit_client()
-                .post("/md/to/wiki", content=mdtext, headers={"content-type": "text/plain"})
-                .content[:32760],
+                "wikimarkup": (
+                    atlaskit_client()
+                    .post("/md/to/wiki", content=mdtext, headers={"content-type": "text/plain"})
+                    .content[:32760]
+                ),
             }
         )
     else:

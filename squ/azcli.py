@@ -1,7 +1,7 @@
 """
 Azure CLI helpers and core functions
 """
-# pylint: disable=logging-fstring-interpolation, unspecified-encoding
+# pylint: disable=logging-fstring-interpolation, unspecified-encoding, broad-exception-raised
 import base64
 import hashlib
 import importlib
@@ -189,9 +189,11 @@ def bootstrap(_app_state: dict):
                 KustoConnectionStringBuilder.with_az_cli_authentication(cluster)
             ),
             "dx_db": default_dx_db,
-            "keyvault_session": lambda: load_session(boot(os.environ["KEYVAULT_SESSION_SECRET"]))
-            if "KEYVAULT_SESSION_SECRET" in os.environ
-            else None,
+            "keyvault_session": lambda: (
+                load_session(boot(os.environ["KEYVAULT_SESSION_SECRET"]))
+                if "KEYVAULT_SESSION_SECRET" in os.environ
+                else None
+            ),
             "sessions": {},
         }
     )
@@ -211,7 +213,7 @@ def login(refresh: bool = False):
                 ["logout", "--only-show-errors", "-o", "json"], out_file=open(os.devnull, "w")
             )
         # Use managed service identity to login
-        loginstatus = cli.invoke(
+        cli.invoke(
             ["login", "--identity", "--only-show-errors", "-o", "json"],
             out_file=open(os.devnull, "w"),
         )
@@ -355,12 +357,14 @@ def get_blob_path(url: str, subscription: str = ""):
         sas = settings("datalake_sas")  # use preset sas token if available
     else:
         sas = generatesas(account, container, subscription)
-    return UPath(f"az://{container}", account_name = account, sas_token = sas)
+    return UPath(f"az://{container}", account_name=account, sas_token=sas)
+
 
 def adxtable2df(table):
     columns = [col.column_name for col in table.columns]
     frame = pandas.DataFrame(table.raw_rows, columns=columns)
     return frame
+
 
 def adx_query(kql):
     """
