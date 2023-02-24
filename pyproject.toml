@@ -33,7 +33,7 @@ adlfs = "^2023.1.0"
 azure-kusto-data = "^4.1.1"
 azure-cli = "^2.45.0"
 setuptools = "^67.3.2"
-atlassian-python-api = "^3.32.2"
+atlassian-python-api = "^3.33.0"
 abuseipdb-wrapper = "^0.1.6"
 
 [tool.poetry.group.dev.dependencies]
