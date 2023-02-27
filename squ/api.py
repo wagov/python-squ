@@ -64,8 +64,17 @@ def jira_client():
     )
 
 
+def clear_cached_adxqueries():
+    """
+    Clears all cached adx queries
+    """
+    for table in adx_query(".show tables").raw_rows:
+        if table[0].startswith("cached_adxquery__"):
+            adx_query(f".drop table {table[0]}")
+
+
 @cache.memoize()
-def cached_adxquery(query, latest_scalar="summarize max(TimeGenerated)", max_query_age="1d"):
+def cached_adxquery(query, latest_scalar="summarize max(ingestion_time())", max_query_age="1d"):
     """
     Convenience function to run a query and cache in data explorer for a period
     """
