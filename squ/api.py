@@ -47,15 +47,36 @@ class OutputFormat(str, Enum):
 
 
 def abuse_client():
+    """
+    Returns an abuseipdb client
+    """
     return AbuseIPDB(API_KEY=os.environ["ABUSEIPDB_API_KEY"])
 
 
 def jira_client():
+    """
+    Returns a jira client
+    """
     return Jira(
         url=os.environ["JIRA_URL"],
         username=os.environ["JIRA_USERNAME"],
         password=os.environ["JIRA_PASSWORD"],
     )
+
+
+@cache.memoize()
+def cached_adxquery(query, latest_scalar="summarize max(TimeGenerated)", max_query_age="1d"):
+    """
+    Convenience function to run a query and cache in data explorer for a period
+    """
+    max_query_age = pandas.Timestamp("now", tz="UTC") - pandas.Timedelta(max_query_age)
+    cachetable = "cached_adxquery__" + hashlib.sha256(query.encode("utf8")).hexdigest()
+    try:
+        cache_age = adx_query(f"{cachetable} | {latest_scalar}").raw_rows[0][0]
+        assert pandas.Timestamp(cache_age) > max_query_age
+    except Exception:  # pylint: disable=broad-except
+        adx_query(f".set-or-replace {cachetable} <| {query}")
+    return adxtable2df(adx_query(cachetable))
 
 
 def datalake_json(path: str, content=None, modified_key: Optional[str] = None) -> dict:
