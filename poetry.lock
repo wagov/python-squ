@@ -268,13 +268,13 @@ files = [
 
 [[package]]
 name = "atlassian-python-api"
-version = "3.33.0"
+version = "3.34.0"
 description = "Python Atlassian REST API Wrapper"
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "atlassian-python-api-3.33.0.tar.gz", hash = "sha256:e0c44964d09ea6a155a97c08fffc122ca44bcfe40dd0d2dfdcac7be027dc878f"},
+    {file = "atlassian-python-api-3.34.0.tar.gz", hash = "sha256:3f410f62390e791fd72c11dc71b32ae0baf3f539b789bddfc654687471c9b2c9"},
 ]
 
 [package.dependencies]
@@ -678,14 +678,14 @@ typing-extensions = ">=4.0.1"
 
 [[package]]
 name = "azure-kusto-data"
-version = "4.1.1"
+version = "4.1.2"
 description = "Kusto Data Client"
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "azure-kusto-data-4.1.1.tar.gz", hash = "sha256:e6af9c3d573c224f75ab41c13b7d5948746b132861711781a371b86092c2cc29"},
-    {file = "azure_kusto_data-4.1.1-py2.py3-none-any.whl", hash = "sha256:e801a061b6062b6e9d094790534d8fa49f428de3f2d877556a4e64bdc38c3ab1"},
+    {file = "azure-kusto-data-4.1.2.tar.gz", hash = "sha256:e7b5e828ec9a282d3d91976b53b9b1f2c4e34ae3441d22235fb40e04825df6a8"},
+    {file = "azure_kusto_data-4.1.2-py2.py3-none-any.whl", hash = "sha256:e573cee451df5c2a3f05344d5801b0d11b990c8f6a65839c6ff0972d269a3e83"},
 ]
 
 [package.dependencies]
@@ -1920,20 +1920,24 @@ files = [
 
 [[package]]
 name = "azure-storage-blob"
-version = "12.14.1"
+version = "12.15.0"
 description = "Microsoft Azure Blob Storage Client Library for Python"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "azure-storage-blob-12.14.1.zip", hash = "sha256:860d4d82985a4bfc7d3271e71275af330f54f330a754355435a7ba749ccde997"},
-    {file = "azure_storage_blob-12.14.1-py3-none-any.whl", hash = "sha256:52b84658e8df7853a3cf1c563814655b5028b979b2a87905b92aa6bb30be240e"},
+    {file = "azure-storage-blob-12.15.0.zip", hash = "sha256:f8b8d582492740ab16744455408342fb8e4c8897b64a8a3fc31743844722c2f2"},
+    {file = "azure_storage_blob-12.15.0-py3-none-any.whl", hash = "sha256:08d8807c577c63a436740627927c1a03a97c963efc29af5c818aed906590e1cf"},
 ]
 
 [package.dependencies]
-azure-core = ">=1.24.2,<2.0.0"
+azure-core = ">=1.26.0,<2.0.0"
 cryptography = ">=2.1.4"
-msrest = ">=0.7.1"
+isodate = ">=0.6.1"
+typing-extensions = ">=4.0.1"
+
+[package.extras]
+aio = ["azure-core[aio] (>=1.26.0,<2.0.0)"]
 
 [[package]]
 name = "azure-storage-common"
@@ -4027,14 +4031,14 @@ files = [
 
 [[package]]
 name = "pygithub"
-version = "1.57"
+version = "1.58.0"
 description = "Use the full Github API v3"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "PyGithub-1.57-py3-none-any.whl", hash = "sha256:5822febeac2391f1306c55a99af2bc8f86c8bf82ded000030cd02c18f31b731f"},
-    {file = "PyGithub-1.57.tar.gz", hash = "sha256:c273f252b278fb81f1769505cc6921bdb6791e1cebd6ac850cc97dad13c31ff3"},
+    {file = "PyGithub-1.58.0-py3-none-any.whl", hash = "sha256:b7bac601492a2b6c876ef326e4ffa3c1923e32707e415da76bfb8307ee8ffb7e"},
+    {file = "PyGithub-1.58.0.tar.gz", hash = "sha256:e325f5ca2c111d19dea2796c8f1e7ae11da77287007736582196341390d31d35"},
 ]
 
 [package.dependencies]
@@ -4637,14 +4641,14 @@ files = [
 
 [[package]]
 name = "setuptools"
-version = "67.3.2"
+version = "67.4.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "setuptools-67.3.2-py3-none-any.whl", hash = "sha256:bb6d8e508de562768f2027902929f8523932fcd1fb784e6d573d2cafac995a48"},
-    {file = "setuptools-67.3.2.tar.gz", hash = "sha256:95f00380ef2ffa41d9bba85d95b27689d923c93dfbafed4aecd7cf988a25e012"},
+    {file = "setuptools-67.4.0-py3-none-any.whl", hash = "sha256:f106dee1b506dee5102cc3f3e9e68137bbad6d47b616be7991714b0c62204251"},
+    {file = "setuptools-67.4.0.tar.gz", hash = "sha256:e5fd0a713141a4a105412233c63dc4e17ba0090c8e8334594ac790ec97792330"},
 ]
 
 [package.extras]
@@ -4749,14 +4753,14 @@ files = [
 
 [[package]]
 name = "trove-classifiers"
-version = "2023.2.8"
+version = "2023.2.20"
 description = "Canonical source for classifiers on PyPI (pypi.org)."
 category = "dev"
 optional = false
 python-versions = "*"
 files = [
-    {file = "trove-classifiers-2023.2.8.tar.gz", hash = "sha256:3b6960fb96c1d4cc9988bdc1b90bcd65fcf5d9843d884dfc86bd674ff81a4dea"},
-    {file = "trove_classifiers-2023.2.8-py3-none-any.whl", hash = "sha256:3aff899dd9792c4d095740980a5967eb98094ff881faf0b29afc775b75aaaac6"},
+    {file = "trove-classifiers-2023.2.20.tar.gz", hash = "sha256:860b0c0d8c9e0d32629ca5ef137ea1e637580b634b74ba40e1539fd34464c0f5"},
+    {file = "trove_classifiers-2023.2.20-py3-none-any.whl", hash = "sha256:de61417c958b06fd4923b2e26d4e70dd7ffc691d5435bcd7ed78d061278885f1"},
 ]
 
 [[package]]
@@ -5136,21 +5140,21 @@ multidict = ">=4.0"
 
 [[package]]
 name = "zipp"
-version = "3.13.0"
+version = "3.15.0"
 description = "Backport of pathlib-compatible object wrapper for zip files"
 category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "zipp-3.13.0-py3-none-any.whl", hash = "sha256:e8b2a36ea17df80ffe9e2c4fda3f693c3dad6df1697d3cd3af232db680950b0b"},
-    {file = "zipp-3.13.0.tar.gz", hash = "sha256:23f70e964bc11a34cef175bc90ba2914e1e4545ea1e3e2f67c079671883f9cb6"},
+    {file = "zipp-3.15.0-py3-none-any.whl", hash = "sha256:48904fc76a60e542af151aded95726c1a5c34ed43ab4134b597665c86d7ad556"},
+    {file = "zipp-3.15.0.tar.gz", hash = "sha256:112929ad649da941c23de50f356a2b5570c954b65150642bccdd66bf194d224b"},
 ]
 
 [package.extras]
 docs = ["furo", "jaraco.packaging (>=9)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
-testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools", "more-itertools", "pytest (>=6)", "pytest-black (>=0.3.7)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=1.3)", "pytest-flake8", "pytest-mypy (>=0.9.1)"]
+testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more-itertools", "pytest (>=6)", "pytest-black (>=0.3.7)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=1.3)", "pytest-flake8", "pytest-mypy (>=0.9.1)"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "836f5e9190e3989123c27eda42a06a52604d209fd3459e5154aaddfec4085453"
+content-hash = "efe449c44ad550c1a804b0ab05ceb831ba44ec1a143e5d66f2ea119343608079"
