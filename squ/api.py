@@ -84,7 +84,7 @@ def cached_adxquery(query, latest_scalar="summarize max(ingestion_time())", max_
         cache_age = adx_query(f"{cachetable} | {latest_scalar}").raw_rows[0][0]
         assert pandas.Timestamp(cache_age) > max_query_age
     except Exception:  # pylint: disable=broad-except
-        adx_query(f".set-or-replace {cachetable} <| {query}")
+        adx_query(f".set-or-replace with(folder='cached_adxquery') {cachetable} <| {query}")
     return adxtable2df(adx_query(cachetable))
 
 
