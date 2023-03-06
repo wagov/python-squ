@@ -3958,14 +3958,14 @@ poetry-core = ">=1.3.0,<2.0.0"
 
 [[package]]
 name = "poetry-plugin-up"
-version = "0.2.2"
+version = "0.3.0"
 description = "Poetry plugin that updates dependencies and bumps their versions in pyproject.toml file"
 category = "dev"
 optional = false
 python-versions = ">=3.7,<4.0"
 files = [
-    {file = "poetry-plugin-up-0.2.2.tar.gz", hash = "sha256:5c80e59177038ae2facc52af09bd0a7f55e58cf255fb8d153eb36cf1242a619b"},
-    {file = "poetry_plugin_up-0.2.2-py3-none-any.whl", hash = "sha256:51268e1d42b0a8ce2b14e36e25af8be2f57c07df1c151babb10687801fc72936"},
+    {file = "poetry-plugin-up-0.3.0.tar.gz", hash = "sha256:b437c2a963f84ca3c6c3c4112f5f1064bb87a7acf16d1f8c195902cd03f4131b"},
+    {file = "poetry_plugin_up-0.3.0-py3-none-any.whl", hash = "sha256:1444d6bc8660c9257a7ca87db77be3adeb17b870980f9929713f33d376d172f3"},
 ]
 
 [package.dependencies]
@@ -5234,4 +5234,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "54316e312be6b81108ceed490c76b38a9b43974d4ed3fedc930f67337cf421da"
+content-hash = "03184bd62dfd844142a9677c954693fc4fdffa56291eefb4cd2dcacd9738feb7"
