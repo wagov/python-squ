@@ -4843,14 +4843,14 @@ files = [
 
 [[package]]
 name = "universal-pathlib"
-version = "0.0.21"
+version = "0.0.22"
 description = "Pathlib API extended to use fsspec backends"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "universal_pathlib-0.0.21-py3-none-any.whl", hash = "sha256:3ffba2574999ca6aca8c9f4f224499c6571c92cee612cd923a9e909bf23f586b"},
-    {file = "universal_pathlib-0.0.21.tar.gz", hash = "sha256:ed18290f2ded33481a754aac3da94fb6bf78f628027b10c3e95ceb6075415e69"},
+    {file = "universal_pathlib-0.0.22-py3-none-any.whl", hash = "sha256:2772c36cd12b3051316b01ae190f75d679d2cb58796ee41b6662bf1f34b5fc30"},
+    {file = "universal_pathlib-0.0.22.tar.gz", hash = "sha256:cb92756c68235f0feaff65bbfae1b5e27978ee68a41e8aca142b91c76adca242"},
 ]
 
 [package.dependencies]
@@ -5234,4 +5234,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "54316e312be6b81108ceed490c76b38a9b43974d4ed3fedc930f67337cf421da"
+content-hash = "3e814ba5071d227ea75407c82ece68e46dd53f31be49674fc75a70f291a450f8"
